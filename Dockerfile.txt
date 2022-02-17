@@ -1,0 +1,19 @@
+FROM php:7.3.3-apache
+
+# Instalacion de dependecias y cosas necesarias para composer y reportico
+RUN apt-get update \
+    && apt-get install -y zip unzip libpng-dev zlib1g-dev libbz2-dev curl apt-transport-https gnupg \
+    && curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - \
+    && curl https://packages.microsoft.com/config/debian/9/prod.list > /etc/apt/sources.list.d/mssql-release.list \
+    && apt-get -yqq update \
+    && apt-get update \
+    && ACCEPT_EULA=Y apt-get install -y msodbcsql17 mssql-tools unixodbc-dev \
+    && docker-php-ext-install pdo pdo_mysql gd bz2 \
+    && pecl install sqlsrv pdo_sqlsrv \
+    && docker-php-ext-enable sqlsrv pdo_sqlsrv \
+    && curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer \
+    && composer create-project reportico-web/reportico \
+    && chmod -R 777 .
+    
+# Copiamos archivo de configuraciones de reportico a reportico en la imagen
+COPY ./config.php reportico/projects/admin/
