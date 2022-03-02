@@ -1,0 +1,343 @@
+public function crpdffactAction() {
+            // como ver las variables de sesion
+        
+         $codMov=$this->_getParam('cd1');
+         $Referencia=$this->_getParam('cd2');
+         //P-cambiodecimalesfactura
+         //$varempresas=array(1=>array('UnidadMostrar'=>'MTS-LIN','LabelUnidad'=>'Mts Lineales','DeciPrecio'=>4),
+         //                   2=>array('UnidadMostrar'=>'KGNOMOSTRAR','LabelUnidad'=>'Kilogramos','DeciPrecio'=>2),
+         //                   6=>array('UnidadMostrar'=>'KGNOMOSTRAR','LabelUnidad'=>'Kilogramos','DeciPrecio'=>2)
+         //    );
+         $varempresas=array(1=>array('UnidadMostrar'=>'MTS-LIN','LabelUnidad'=>'Mts Lineales','DeciPrecio'=>2),
+                            2=>array('UnidadMostrar'=>'KGNOMOSTRAR','LabelUnidad'=>'Kilogramos','DeciPrecio'=>2),
+                            6=>array('UnidadMostrar'=>'KGNOMOSTRAR','LabelUnidad'=>'Kilogramos','DeciPrecio'=>2)
+             );
+      $modelFactura=new Inventario_Model_Factmodel();     
+      //cambio 08/03/2021 //se agregó en la consulta FactorDsBs
+      $SqlStr="SELECT b.CodMovimiento, b.Tipomoneda, b.Referencia AS NumFactura,b.NombreClienteProveedor AS NombCliente,b.Rif, b.Nit,b.DireccionFiscal,b.Estado,b.firmas,
+       b.fechafirma,b.DireccionDespacho, b.Telefono, b.Observaciones, b.CodClienteProveedor AS CodCliente, b.NombreClienteProveedor As NombClienteContado,      
+       b.MovReferenciado AS OrdenCompra, b.FechaMov, b.CodVendedor, b.TipoPago AS TipoPago, b.ConversionMoneda As FactorMoneda, 
+       b.CantidadDias, case when b.FactorImpuesto is null then 0 else b.FactorImpuesto end AS Impuesto, case when b.Clasif1=1 then 100 else 100 - b.Observaciones end AS FactorDsBs, b.MovReferenciado, 
+       b.FechaVencimiento as FechaVencimiento,  b.Transportista, b.TipoCamion, b.Placa,b.RefSegunProveedor,c.CodMovimiento,c.Referencia,
+       d.CodMovimiento as CodPedido,d.Referencia as RefPedido,d.FechaMov as FechaPedido
+       FROM EN01FACT b join EN01FACT c on b.MovReferenciado=c.Referencia join EN01FACT d on c.MovReferenciado=d.Referencia
+       WHERE (b.CodMovimiento='$codMov') AND (c.CodMovimiento='GIC') AND (d.CodMovimiento='PED') AND (b.Referencia ='$Referencia')";
+      
+      $authNamespace = new Zend_Session_Namespace('Zend_Auth');
+      
+      $regheader=$modelFactura->sqlexec($SqlStr);
+        if (isset($regheader[0])) {
+          $regheader=$regheader[0];
+        } else {
+           $registry = Zend_Registry::getInstance();
+                        //$emp=Zend_Registry::get('empresas');
+           $emp=$registry->empresas;
+           $this->_helper->flashMessenger->addMessage(array(
+                                     'mensaje'=>"No existe la Factura $codMov-$Referencia en la BD de ".$emp[$authNamespace->empresa]));
+           return $this->_redirect('/inventario/fact/list');
+            
+        }
+      $regheader['FechaMov']=$modelFactura->SQLtoLatin($regheader['FechaMov']);
+      $regheader['FechaPedido']=$modelFactura->SQLtoLatin($regheader['FechaPedido']);
+      $regheader['FechaVencimiento']=$modelFactura->SQLtoLatin($regheader['FechaVencimiento']);
+      $regheader['TipoPago']=$regheader['TipoPago'];
+      $regheader['NombCliente']=utf8_encode($regheader['NombCliente']);
+      $regheader['DireccionFiscal']=utf8_encode($regheader['DireccionFiscal']);
+      
+
+
+$regheader['Empresa'] =$authNamespace->empresa;
+$DeciPrecio=$varempresas[$authNamespace->empresa]['DeciPrecio'];
+$UnidadCol2=$varempresas[$authNamespace->empresa]['UnidadMostrar'];
+//$UnidadCol2="SACOS";
+$regheader['LabelUnidad']=$varempresas[$authNamespace->empresa]['LabelUnidad'];
+//$regheader['LabelUnidad']="SACOS";  
+     
+$modelVargen=new Default_Model_Defimodel;
+$vargen = $modelVargen->getSelectWhereOrderSQL('Descripcion,NumeroRif,Direccion','1=1', '');
+$vargen=$vargen[0];
+$regheader['razonSocialEmpresa']=utf8_encode($vargen['Descripcion']);
+
+$regfooter['Texto']='En caso que este documento funcione como factura se regirá por las 
+siguientes condiciones:
+a) El pago debe ser a nombre de: '.$regheader['razonSocialEmpresa'].'
+b) La cancelación se hará con recibo de cobro otorgado por nuestro cobrador autorizado
+c) La mora en el pago de esta factura causará intereses a la tasa vigente en el mercado que
+carguemos a su cuenta
+e) El deudor se dá por notificado de la cesión que, para su cobro, se puede hacer de la presente
+factura.
+f) Para todos los efectos legales relacionados con esta factura, se establece como domicilio
+especial la ciudad de Barquisimeto.
+g) La presentación de esta factura no prueba su cancelación
+SOLO EL ORIGINAL DA DERECHO A CREDITO FISCAL
+ESTE DOCUMENTO VA SIN TACHADURA NI ENMENDADURA';
+
+$regfooter['firmaTexto']='            RECIBI CONFORME :
+
+
+
+
+
+
+
+
+
+
+ __________________________
+
+ FIRMA Y SELLO DEL CLIENTE
+
+ C.I. Nº.';
+
+/*
+$regitems=$modelFactura->sqlexec("SELECT a.CodMovimiento, a.Referencia AS NumFactura,  a.CodArticulo, d.Descripcionfac as CodAlterno, d.Descripcionfac as DescripcionFac,
+       d.DescripcionExp,d.PagaImpuesto,a.Cantidad,a.PreUnitario,a.Descuento, a.UnidadMedida, 
+       a.PrecioExportacion As PrecioExportacion,a.Porc_Impuesto FROM DT01FACT a, EN01ARTI d 
+	   WHERE  (a.CodArticulo=d.CodArticulo) AND (a.CodMovimiento='$codMov') AND (a.Referencia ='11503')");
+ * 
+ */
+
+$SqlItems="select e.CodArticulo,e.CantMult,e.MedMult,e.CantPrim,e.MedPrim,g.Descripcionfac, g.DescripcionExp,f.PreUnitario,f.Porc_Impuesto from 
+( select c.CodArticulo,c.CantMult,c.MedMult,d.CantPrim,d.MedPrim 
+from (select a.CodArticulo as CodArticulo,a.UnidadMedida as MedMult,a.Cantidad as CantMult 
+      from dt05fact a join dt05arti b on a.CodArticulo=b.CodArticulo and a.UnidadMedida=b.Medida 
+	  where a.CodMovimiento='$codMov' and a.Referencia='$Referencia' and b.SeMuestra=1 and a.MedidaQueMultiplica=b.Medida) 
+	  c left join (select a.CodArticulo as CodArticulo,a.UnidadMedida as MedPrim,a.Cantidad as CantPrim 
+	  from dt05fact a join en01arti b on a.CodArticulo=b.CodArticulo and a.UnidadMedida=b.UniPrimaria 
+	  where a.CodMovimiento='$codMov' and a.Referencia='$Referencia') 
+	  d on c.CodArticulo=d.CodArticulo) e 
+	  join dt01fact f on e.CodArticulo=f.CodArticulo 
+	  join en01arti g on e.CodArticulo=g.CodArticulo 
+	  where f.CodMovimiento='$codMov' and f.Referencia='$Referencia'";
+
+
+
+$SqlItems="select e.CodArticulo,e.CantMult,e.MedMult,e.CantPrim,e.MedPrim,e.CantCol2,e.MedCol2,g.Descripcionfac, g.DescripcionExp,f.PreUnitario,f.Porc_Impuesto from 
+( select c.CodArticulo,c.NroItem,c.CantMult,c.MedMult,d.CantPrim,d.MedPrim,d2.MedCol2,d2.CantCol2 from 
+(select a.CodArticulo as CodArticulo,a.NroItem,a.UnidadMedida as MedMult,a.Cantidad as CantMult 
+ from dt05fact a join 
+ dt05arti b on a.CodArticulo=b.CodArticulo and a.UnidadMedida=b.Medida where a.CodMovimiento='$codMov' and a.Referencia='$Referencia' and b.SeMuestra=1 and a.MedidaQueMultiplica=b.Medida)
+  c left join (
+     select a.CodArticulo as CodArticulo,a.NroItem,a.UnidadMedida as MedPrim,a.Cantidad as CantPrim from dt05fact a 
+	 join en01arti b on a.CodArticulo=b.CodArticulo and a.UnidadMedida=b.UniPrimaria where a.CodMovimiento='$codMov' and a.Referencia='$Referencia')
+	  d on c.CodArticulo=d.CodArticulo and c.NroItem=d.NroItem
+
+   left join (
+     select a.CodArticulo as CodArticulo,a.NroItem,a.UnidadMedida as MedCol2,a.Cantidad as CantCol2 
+from dt05fact a   
+where a.CodMovimiento='$codMov' and a.Referencia='$Referencia' and a.UnidadMedida='$UnidadCol2')
+	  d2 on c.CodArticulo=d2.CodArticulo and c.NroItem=d2.NroItem
+	  ) e join dt01fact f on e.CodArticulo=f.CodArticulo and e.NroItem=f.NroItem join en01arti g on e.CodArticulo=g.CodArticulo 
+	  where f.CodMovimiento='$codMov' and f.Referencia='$Referencia'";
+
+
+$SqlItems="select e.CodArticulo,e.NroItem,e.CantMult,e.MedMult,e.CantPrim,e.MedPrim,e.CantCol2,e.MedCol2,g.Descripcionfac, g.DescripcionExp,f.PreUnitario,f.Porc_Impuesto from 
+( select c.CodArticulo,c.NroItem,c.CantMult,c.MedMult,d.CantPrim,d.MedPrim,d2.MedCol2,d2.CantCol2 from 
+(select a.CodArticulo as CodArticulo,a.NroItem,a.UnidadMedida as MedMult,a.Cantidad as CantMult 
+ from dt05fact a join 
+ dt05arti b on a.CodArticulo=b.CodArticulo and a.UnidadMedida=b.Medida where a.CodMovimiento='$codMov' and a.Referencia='$Referencia' and a.MedidaQueMultiplica=a.UnidadMedida)
+  c left join (
+     select a.CodArticulo as CodArticulo,a.NroItem,a.UnidadMedida as MedPrim,a.Cantidad as CantPrim from dt05fact a 
+	 join en01arti b on a.CodArticulo=b.CodArticulo and a.UnidadMedida=b.UniPrimaria where a.CodMovimiento='$codMov' and a.Referencia='$Referencia')
+	  d on c.CodArticulo=d.CodArticulo and c.NroItem=d.NroItem
+
+   left join (
+     select a.CodArticulo as CodArticulo,a.NroItem,a.UnidadMedida as MedCol2,a.Cantidad as CantCol2 
+from dt05fact a   
+where a.CodMovimiento='$codMov' and a.Referencia='$Referencia' and a.UnidadMedida='$UnidadCol2')
+	  d2 on c.CodArticulo=d2.CodArticulo and c.NroItem=d2.NroItem
+	  ) e join dt01fact f on e.CodArticulo=f.CodArticulo and e.NroItem=f.NroItem join en01arti g on e.CodArticulo=g.CodArticulo 
+	  where f.CodMovimiento='$codMov' and f.Referencia='$Referencia'
+   union
+select t.CodServicio as CodArticulo,'1' as Item,t.Cantidad as CantMult,t.Medida as MedMult,t.Cantidad,t.Medida,0,'nomedida2',
+t.Descripcion as DescripcionFac,
+       t.Descripcion as DescripcionExp,t.PrecioUnitario as PreUnitario,t.Exonerado as Porc_Impuesto from 
+       dt03fact t 
+       where t.CodMovimiento='$codMov' and t.Referencia='$Referencia' 
+";
+//ojo 20180329 cambio en01arti por dt01fact
+$SqlItems="select e.CodArticulo,e.NroItem,e.CantMult,e.MedMult,e.CantPrim,e.MedPrim,e.CantCol2,e.MedCol2,g.Descripcionfac, g.DescripcionExp,f.PreUnitario,f.Porc_Impuesto from 
+( select c.CodArticulo,c.NroItem,c.CantMult,c.MedMult,d.CantPrim,d.MedPrim,d2.MedCol2,d2.CantCol2 from 
+(select a.CodArticulo as CodArticulo,a.NroItem,a.UnidadMedida as MedMult,a.Cantidad as CantMult 
+ from dt05fact a join 
+ dt05arti b on a.CodArticulo=b.CodArticulo and a.UnidadMedida=b.Medida where a.CodMovimiento='$codMov' and a.Referencia='$Referencia' and a.MedidaQueMultiplica=a.UnidadMedida)
+  c left join (
+     select a.CodArticulo as CodArticulo,a.NroItem,a.UnidadMedida as MedPrim,a.Cantidad as CantPrim from dt05fact a 
+	 join dt01fact b on a.CodMovimiento=b.CodMovimiento and a.Referencia=b.Referencia and  a.CodArticulo=b.CodArticulo and a.NroItem=b.NroItem and a.UnidadMedida=b.UnidadMedida where a.CodMovimiento='$codMov' and a.Referencia='$Referencia')
+	  d on c.CodArticulo=d.CodArticulo and c.NroItem=d.NroItem
+
+   left join (
+     select a.CodArticulo as CodArticulo,a.NroItem,a.UnidadMedida as MedCol2,a.Cantidad as CantCol2 
+from dt05fact a   
+where a.CodMovimiento='$codMov' and a.Referencia='$Referencia' and a.UnidadMedida='$UnidadCol2')
+	  d2 on c.CodArticulo=d2.CodArticulo and c.NroItem=d2.NroItem
+	  ) e join dt01fact f on e.CodArticulo=f.CodArticulo and e.NroItem=f.NroItem join en01arti g on e.CodArticulo=g.CodArticulo 
+	  where f.CodMovimiento='$codMov' and f.Referencia='$Referencia'
+   union
+select t.CodServicio as CodArticulo,'1' as Item,t.Cantidad as CantMult,t.Medida as MedMult,t.Cantidad,t.Medida,0,'nomedida2',
+t.Descripcion as DescripcionFac,
+       t.Descripcion as DescripcionExp,t.PrecioUnitario as PreUnitario,t.Exonerado as Porc_Impuesto from 
+       dt03fact t 
+       where t.CodMovimiento='$codMov' and t.Referencia='$Referencia' 
+";
+ 
+ 
+
+//echo $SqlItems;
+$regitems2=$modelFactura->sqlexec($SqlItems);
+$regitems=$regitems2;
+$subtotal=0;
+$subtotalbs=0;
+$baseimp=0;
+$baseimpbs=0;
+foreach ($regitems2 as $index=>$esteregitem) {
+    $importe=round($esteregitem['CantMult']*$esteregitem['PreUnitario'],2);
+    //$importe=round($esteregitem['CantMult']*677472.75,2);
+    //cambio 08/03/2021se agregan las siguientes 3 lineas
+    $preciobs=round($esteregitem['PreUnitario']*$regheader['FactorDsBs']*$regheader['FactorMoneda']/100,2);
+    $importebs=round($preciobs*$esteregitem['CantMult'],2);
+    $subtotalbs+=$importebs;
+    //echo $modelFactura->formatDec2($subtotalbs);
+    if (round($esteregitem['Porc_Impuesto'],2)>0) {
+       $baseimp+=$importe; 
+       $baseimpbs+=$importebs; 
+    }        
+    $subtotal+=$importe;
+    //cambio 08/03/2021 //$regitems[$index]['subtotal']=$modelFactura->formatDec2($importe);
+    //$regitems[$index]['subtotal']=$modelFactura->formatDec2($importe*$regheader['FactorDsBs']*$regheader['FactorMoneda']/100);
+    //$regitems[$index]['subtotal']=$modelFactura->formatDec2(6116073400);
+    //
+
+    //cambio 08/03/2021//$regitems[$index]['subtotal']=$modelFactura->formatDec2(round($importe*$regheader['FactorDsBs']*$regheader['FactorMoneda']/100,2));
+    $regitems[$index]['subtotal']=$modelFactura->formatDec2($importebs);
+
+    
+    $regitems[$index]['CantCustom']=($UnidadCol2==$esteregitem['MedCol2'])?$regitems[$index]['CantCol2']:null;
+    $regitems[$index]['CantCustom']=$modelFactura->formatDec2($regitems[$index]['CantCustom']);
+    $regitems[$index]['CantPrim']=$modelFactura->formatDec2($esteregitem['CantPrim']);
+    //cambio 08/03/2021 //$regitems[$index]['PreUnitario']=$modelFactura->formatDec2($esteregitem['PreUnitario'],$DeciPrecio);
+    $regitems[$index]['PreUnitario']=$modelFactura->formatDec2($esteregitem['PreUnitario']*$regheader['FactorDsBs']*$regheader['FactorMoneda']/100,$DeciPrecio);
+    
+}
+
+//$regitems[0]['subtotal']=$modelFactura->formatDec2(4737155832.60);
+//$regitems[1]['subtotal']=$modelFactura->formatDec2(4605568171.20);
+//$regitems[2]['subtotal']=$modelFactura->formatDec2(1184288958.30);
+//$regitems[3]['subtotal']=$modelFactura->formatDec2(1257393214.80);
+
+//$regfooter['Subtotal']=$subtotal;
+
+$regfooter['Subtotal']=$subtotal;
+$regfooter['BaseImp']=$baseimp;
+//$varempresas[$authNamespace->empresa]['UnidadMostrar']
+
+$Metodo=1;//0=Neto 1=Separados impuestos positivos de negativos
+
+if ($Metodo==0) {
+    $regimpuestos=$modelFactura->sqlexec("SELECT sum(a.MonPorcentaje) as montoimp
+    FROM dt02fact a join mt01rede b on a.CodigoRecargoDescuento=b.Codigo 
+    where CodMovimiento='$codMov' AND (Referencia ='$Referencia') and b.ImpuestoDefinitivo=1");
+
+} else {
+    $regimpuestos=$modelFactura->sqlexec("SELECT RecargoDescuento,sum(a.MonPorcentaje) as montoimp
+    FROM dt02fact a join mt01rede b on a.CodigoRecargoDescuento=b.Codigo 
+    where CodMovimiento='$codMov' AND (Referencia ='$Referencia') and b.ImpuestoDefinitivo=1
+    group by RecargoDescuento");
+    $regfooter['textodesc']='Rebaja de IVA por Decreto Nro. 3.085 de fecha 19/09/2017';
+}
+
+
+if (count($regimpuestos)>0) {
+  if ($Metodo==0) {  
+    $regimpuestos=$regimpuestos[0];
+    $regfooter['totalimp']=round($regimpuestos['montoimp'],2);
+    $regfooter['porcimp']=($regfooter['BaseImp']==0)?0:round($regfooter['totalimp']/$regfooter['BaseImp']*100,2);
+  } else {
+    //$regimpuestos=$regimpuestos[0];
+    $regfooter['totalimp']=round($regimpuestos[0]['montoimp'],2);
+    $regfooter['porcimp']=($regfooter['BaseImp']==0)?0:round($regfooter['totalimp']/$regfooter['BaseImp']*100,2); 
+    if (!isset($regimpuestos[1]['montoimp'])) {
+       $Metodo=0; 
+    } else {
+        $regfooter['descimp']=round($regimpuestos[1]['montoimp'],2);
+        $regfooter['porcdescimp']=abs(($regfooter['BaseImp']==0)?0:round($regfooter['descimp']/$regfooter['BaseImp']*100,2));
+    }    
+  }
+} else {
+  $regfooter['totalimp']=0;
+  $regfooter['porcimp']=0; 
+  $regfooter['descimp']=0;
+  $regfooter['porcdescimp']=0;
+}
+///$totventa=$regfooter['totVENTA'];
+
+if ($Metodo==0) {  
+    $regfooter['totVENTA']=$modelFactura->formatDec2($regfooter['Subtotal']+$regfooter['totalimp']);
+} else {
+    $regfooter['totVENTA']=$modelFactura->formatDec2($regfooter['Subtotal']+$regfooter['totalimp']+$regfooter['descimp']);
+    $regfooter['descimp']=$modelFactura->formatDec2($regfooter['descimp']);
+    $regfooter['porcdescimp']=$modelFactura->formatDec2($regfooter['porcdescimp']);
+}
+
+$regfooter['Metodo']=$Metodo;
+
+//$regfooter['totalimpdiv']=$regfooter['totalimp']*10;
+$totalimp=$regfooter['totalimp'];
+
+//provisional el factor de descuento en Bs.
+$regfooter['FactorDsBs']=$regheader['FactorDsBs']/100;
+$regfooter['FactorMoneda']=round($regheader['FactorMoneda'],2);
+$regfooter['Subtotal']=round($subtotalbs,2);
+$regfooter['BaseImp']=$regfooter['Subtotal'];
+//$regfooter['BaseImp']=11784406176.90;
+$regfooter['totalimp']=round(($regfooter['BaseImp']*$regfooter['porcimp'])/100,2);
+//lo voy a poner en 16 provisional
+$regfooter['totalimp']=round(($regfooter['BaseImp']*16)/100,2);
+$regfooter['totVENTA']=round(($regfooter['BaseImp']+$regfooter['totalimp']),2);
+
+$regfooter['Subtotal']=$modelFactura->formatDec2($regfooter['Subtotal']);
+//$regfooter['Subtotal']=$modelFactura->formatDec2(11784406176.90);
+$regfooter['BaseImp']=$modelFactura->formatDec2($regfooter['BaseImp']);
+$regfooter['totalimp']=$modelFactura->formatDec2($regfooter['totalimp']);
+$regfooter['porcimp']=$modelFactura->formatDec2($regfooter['porcimp']);
+$regfooter['totVENTA']=$modelFactura->formatDec2($regfooter['totVENTA']);
+
+$regfooter['FactorMoneda']=round($regheader['FactorMoneda'],2);
+
+$regfooter['Subtotaldiv']=round($subtotal*$regfooter['FactorMoneda'],2);
+$regfooter['BaseImpdiv']=$regfooter['Subtotaldiv'];
+$regfooter['totalimpdiv']=round(($regfooter['BaseImpdiv']*$regfooter['porcimp'])/100,2);
+$regfooter['porcimpdiv']=$regfooter['porcimp'];
+$regfooter['totVENTAdiv']=bcdiv($regfooter['totalimpdiv'],1,2)+bcdiv($regfooter['BaseImpdiv'],1,2);
+
+$regfooter['Subtotaldiv']=$modelFactura->formatDec2($regfooter['Subtotaldiv']);
+$regfooter['BaseImpdiv']=$modelFactura->formatDec2($regfooter['BaseImpdiv']);
+$regfooter['totalimpdiv']=$modelFactura->formatDec2($regfooter['totalimpdiv']);
+$regfooter['totVENTAdiv']=$modelFactura->formatDec2($regfooter['totVENTAdiv']);
+$regfooter['FactorMoneda']=$modelFactura->formatDec2($regheader['FactorMoneda']);
+//$regfooter['FactorMoneda']=number_format($regheader['FactorMoneda'],2);
+//echo $regheader['FechaMov'];
+
+
+            if($regheader['FechaMov'] >= date('2021-03-08')) {
+               //cambio 08/03/2021 //include_once('/templates/facturadiv.php');//Esto esta ubicado en public/tcpdf/templates
+                include_once('/templates/factura.php');//Esto esta ubicado en public/tcpdf/templates
+                
+            }
+            else {
+                
+                //cambio 08/03/2021 //include_once('/templates/factura.php');//Esto esta ubicado en public/tcpdf/templates
+                if($regheader['Tipomoneda']=="$") {
+                    include_once('/templates/factura.php');
+                }
+                else {
+                    include_once('/templates/factura.php');
+                }
+            }
+            
+            exit;
+            
+            
+             
+        }
+        
